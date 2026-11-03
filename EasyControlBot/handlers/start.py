@@ -1,19 +1,28 @@
 from aiogram import Router, F
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
 router = Router()
 
-
 def get_main_menu_keyboard():
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="➕ Добавить товар", callback_data="btn_add")],
-            [InlineKeyboardButton(text="📋 Мои товары", callback_data="btn_items")],
-            [InlineKeyboardButton(text="🗑 Очистить список товаров", callback_data="btn_clear")]
-        ]
-    )
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="➕ Добавить товар", callback_data="btn_add")],
+        [InlineKeyboardButton(text="📋 Мои товары", callback_data="btn_items")],
+        [InlineKeyboardButton(text="🗑 Очистить список", callback_data="btn_clear")]
+    ])
 
 @router.message(F.text == "/start")
 async def cmd_start(message: Message):
-    text = "👋 <b>Главное меню:</b>\n\nВыбери нужное действие:"
-    await message.answer(text, reply_markup=get_main_menu_keyboard(), parse_mode="HTML")
+    await message.answer(
+        "👋 <b>Привет! Я бот для контроля сроков годности.</b>\n\nВыбери нужное действие:",
+        reply_markup=get_main_menu_keyboard(),
+        parse_mode="HTML"
+    )
+
+@router.callback_query(F.data == "btn_back_to_menu")
+async def back_to_menu(callback: CallbackQuery):
+    await callback.message.answer(
+        "👋 <b>Главное меню:</b>\n\nВыбери нужное действие:",
+        reply_markup=get_main_menu_keyboard(),
+        parse_mode="HTML"
+    )
+    await callback.answer()

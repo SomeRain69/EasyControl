@@ -4,9 +4,10 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy import select, delete
 from datetime import datetime
+
 from database.database import async_session_maker
 from database.models import ItemModel
-
+from handlers.start import get_main_menu_keyboard
 
 router = Router()
 
@@ -16,17 +17,7 @@ class AddItemState(StatesGroup):
     waiting_for_date = State()
 
 
-# Кнопка "Назад в меню"
-@router.callback_query(F.data == "btn_back_to_menu")
-async def back_to_menu(callback: CallbackQuery, state: FSMContext):
-    await state.clear()
-    from EasyControlBot.handlers.start import get_main_menu_keyboard
-    await callback.message.answer("👋 <b>Главное меню:</b>\n\nВыбери нужное действие:",
-                                  reply_markup=get_main_menu_keyboard(), parse_mode="HTML")
-    await callback.answer()
-
-
-# 1. Шаг добавления товара
+# Шаг 1: Добавление товара (название)
 @router.callback_query(F.data == "btn_add")
 async def start_add_item(callback: CallbackQuery, state: FSMContext):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -64,6 +55,7 @@ async def process_item_name(message: Message, state: FSMContext):
     await state.set_state(AddItemState.waiting_for_date)
 
 
+# Шаг 2: Ввод даты и сохранение товара в базу
 @router.message(AddItemState.waiting_for_date)
 async def process_item_date(message: Message, state: FSMContext):
     date_text = message.text.strip()
@@ -98,16 +90,16 @@ async def process_item_date(message: Message, state: FSMContext):
         session.add(new_item)
         await session.commit()
 
-    from EasyControlBot.handlers.start import get_main_menu_keyboard
+    # Очищаем состояние и отправляем подтверждение с клавиатурой меню
+    await state.clear()
     await message.answer(
         f"✅ Товар <b>«{item_name}»</b> (годен до {date_text}) успешно добавлен!",
         reply_markup=get_main_menu_keyboard(),
         parse_mode="HTML"
     )
-    await state.clear()
 
 
-# 2. Просмотр списка с кнопкой удаления для каждого товара
+# Просмотр списка товаров с кнопками удаления
 @router.callback_query(F.data == "btn_items")
 async def show_items(callback: CallbackQuery):
     user_id = callback.from_user.id
@@ -140,7 +132,7 @@ async def show_items(callback: CallbackQuery):
         await callback.answer()
 
 
-# 3. Удаление конкретного товара по кнопке
+# Удаление конкретного товара
 @router.callback_query(F.data.startswith("del_item_"))
 async def delete_single_item(callback: CallbackQuery):
     item_id = int(callback.data.split("_")[2])
@@ -150,6 +142,4 @@ async def delete_single_item(callback: CallbackQuery):
 
     await callback.message.answer("🗑 Товар успешно удален из базы!")
     await callback.answer()
-
-    # Переоткрываем обновленный список
     await show_items(callback)

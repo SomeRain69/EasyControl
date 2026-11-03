@@ -1,10 +1,12 @@
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from sqlalchemy import delete
+
 from database.database import async_session_maker
 from database.models import ItemModel
-router = Router()
+from handlers.start import get_main_menu_keyboard
 
+router = Router()
 
 
 @router.callback_query(F.data == "btn_clear")
@@ -25,6 +27,5 @@ async def clear_execute(callback: CallbackQuery):
         await session.execute(delete(ItemModel).where(ItemModel.user_id == user_id))
         await session.commit()
 
-    from EasyControlBot.handlers.start import get_main_menu_keyboard
     await callback.message.answer("🗑 Весь список товаров успешно очищен!", reply_markup=get_main_menu_keyboard())
     await callback.answer()
