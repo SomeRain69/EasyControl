@@ -3,7 +3,7 @@ import os
 from aiogram import Bot, Dispatcher
 from aiohttp import web
 from config import config
-from database.database import init_db
+from database.database import init_db, async_session_maker
 from handlers import start, items, clear
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
@@ -11,7 +11,7 @@ from database.models import ItemModel
 from datetime import datetime
 
 
-# --- ВЕБ-СЕРВЕР ДЛЯ RENDER (чтобы не засыпал и не отключался) ---
+# --- ВЕБ-СЕРВЕР ДЛЯ RENDER (чтобы бот не засыпал) ---
 async def handle(request):
     return web.Response(text="Bot is running!")
 
@@ -22,7 +22,6 @@ async def web_server():
     runner = web.AppRunner(app)
     await runner.setup()
 
-    # Render передает порт через переменные окружения, по умолчанию берем 10000
     port = int(os.environ.get("PORT", 10000))
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
@@ -30,7 +29,7 @@ async def web_server():
 
 # --- ФОНОВАЯ ПРОВЕРКА СРОКОВ ГОДНОСТИ ---
 async def check_expiring_items(bot: Bot):
-    async with start.async_session_maker() as session:
+    async with async_session_maker() as session:
         result = await session.execute(select(ItemModel))
         items_list = result.scalars().all()
 
