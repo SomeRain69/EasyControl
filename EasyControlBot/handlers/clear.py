@@ -1,44 +1,30 @@
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from sqlalchemy import delete
-
-from database.database import async_session_maker
-from database.models import ItemModel
+from EasyControlBot.database.database import async_session_maker
+from EasyControlBot.database.models import ItemModel
 
 router = Router()
 
 
-# 1. ЗАПРОС ПОДТВЕРЖДЕНИЯ ОЧИСТКИ
 @router.callback_query(F.data == "btn_clear")
-async def confirm_clear_items(callback: CallbackQuery):
-    confirm_keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="✅ Да, удалить всё", callback_data="confirm_yes")],
-            [InlineKeyboardButton(text="❌ Отмена", callback_data="back_to_main")]
-        ]
-    )
-
-    text = "⚠️ <b>Ты действительно хочешь удалить все свои товары?</b>\nЭто действие нельзя отменить."
-    await callback.message.edit_text(text, reply_markup=confirm_keyboard, parse_mode="HTML")
+async def clear_confirm(callback: CallbackQuery):
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Да, очистить всё", callback_data="confirm_clear")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="btn_back_to_menu")]
+    ])
+    await callback.message.answer("⚠️ Вы уверены, что хотите полностью очистить весь список товаров?",
+                                  reply_markup=keyboard)
     await callback.answer()
 
 
-# 2. УДАЛЕНИЕ ПОСЛЕ ПОДТВЕРЖДЕНИЯ
-@router.callback_query(F.data == "confirm_yes")
-async def execute_clear_items(callback: CallbackQuery):
+@router.callback_query(F.data == "confirm_clear")
+async def clear_execute(callback: CallbackQuery):
     user_id = callback.from_user.id
-
-    # Удаляем из базы данных только товары этого пользователя
     async with async_session_maker() as session:
         await session.execute(delete(ItemModel).where(ItemModel.user_id == user_id))
         await session.commit()
 
-    back_kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ Назад в меню", callback_data="back_to_main")]
-        ]
-    )
-
-    text = "🗑 <b>Твой список товаров полностью очищен!</b>"
-    await callback.message.edit_text(text, reply_markup=back_kb, parse_mode="HTML")
+    from EasyControlBot.handlers.start import get_main_menu_keyboard
+    await callback.message.answer("🗑 Весь список товаров успешно очищен!", reply_markup=get_main_menu_keyboard())
     await callback.answer()

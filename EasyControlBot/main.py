@@ -2,13 +2,14 @@ import asyncio
 import os
 from aiogram import Bot, Dispatcher
 from aiohttp import web
-from config import config
-from database.database import init_db, async_session_maker
-from handlers import start, items, clear
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
-from database.models import ItemModel
 from datetime import datetime
+
+from EasyControlBot.config import config
+from EasyControlBot.database.database import init_db, async_session_maker
+from EasyControlBot.handlers import start, items, clear
+from EasyControlBot.database.models import ItemModel
 
 
 # --- ВЕБ-СЕРВЕР ДЛЯ RENDER (чтобы бот не засыпал) ---
@@ -40,10 +41,18 @@ async def check_expiring_items(bot: Bot):
                     exp_date = datetime.strptime(item.expires_at, "%d.%m.%Y").date()
                     delta = (exp_date - today).days
 
-                    if delta == 14 and item.notified_14_days == 0:
+                    # Если осталось 14 дней или меньше (и уведомление еще не уходило)
+                    if delta <= 14 and item.notified_14_days == 0:
+                        if delta > 0:
+                            msg = f"⚠️ <b>Внимание!</b> У товара <b>«{item.name}»</b> истекает срок годности через {delta} дн. (годен до {item.expires_at})."
+                        elif delta == 0:
+                            msg = f"🚨 <b>Внимание!</b> У товара <b>«{item.name}»</b> срок годности истекает <b>сегодня</b> ({item.expires_at})!"
+                        else:
+                            msg = f"❌ <b>Просрочка!</b> У товара <b>«{item.name}»</b> истек срок годности {item.expires_at}!"
+
                         await bot.send_message(
                             item.user_id,
-                            f"⚠️ <b>Внимание!</b> У товара <b>«{item.name}»</b> истекает срок годности через 14 дн. (годен до {item.expires_at}).",
+                            msg,
                             parse_mode="HTML"
                         )
                         item.notified_14_days = 1
@@ -65,7 +74,7 @@ async def main():
     # Инициализация базы данных
     await init_db()
 
-    # Настройка планировщика
+    # Настройка планировщика (проверка каждые 30 секунд)
     scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
     scheduler.add_job(check_expiring_items, "interval", seconds=30, args=(bot,))
     scheduler.start()
