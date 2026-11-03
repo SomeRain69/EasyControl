@@ -1,9 +1,8 @@
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from sqlalchemy import delete
-from EasyControlBot.database.database import async_session_maker
-from EasyControlBot.database.models import ItemModel
-
+from database.database import async_session_maker
+from database.models import ItemModel
 router = Router()
 
 
