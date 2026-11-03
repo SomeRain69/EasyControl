@@ -1,84 +1,83 @@
 import asyncio
-import logging
 import os
-import sys
 from aiogram import Bot, Dispatcher
-from aiogram.enums import ParseMode
-from aiogram.client.default import DefaultBotProperties
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from aiohttp import web
-
 from config import config
 from database.database import init_db
 from handlers import start, items, clear
-from services.scheduler import check_expiring_items
-
-# Настройка логирования для консоли Render
-logging.basicConfig(level=logging.INFO, stream=sys.stdout)
-
-
-# ==========================================
-# 1. ВЕБ-СЕРВЕР ДЛЯ RENDER (Health Check)
-# ==========================================
-async def handle_ping(request):
-    """Простейший обработчик, чтобы Render видел открытый порт и не усыплял сервис."""
-    return web.Response(text="Bot is running and alive!")
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from sqlalchemy import select
+from database.models import ItemModel
+from datetime import datetime
 
 
-async def start_web_server():
+# --- ВЕБ-СЕРВЕР ДЛЯ RENDER (чтобы не засыпал и не отключался) ---
+async def handle(request):
+    return web.Response(text="Bot is running!")
+
+
+async def web_server():
     app = web.Application()
-    app.router.add_get("/", handle_ping)
-
-    # Render автоматически передает нужный порт в переменную окружения PORT
-    port = int(os.environ.get("PORT", 10000))
-
+    app.router.add_get("/", handle)
     runner = web.AppRunner(app)
     await runner.setup()
+
+    # Render передает порт через переменные окружения, по умолчанию берем 10000
+    port = int(os.environ.get("PORT", 10000))
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    logging.info(f"Web server successfully started on port {port}")
 
 
-# ==========================================
-# 2. ОСНОВНАЯ ФУНКЦИЯ ЗАПУСКА БОТА
-# ==========================================
+# --- ФОНОВАЯ ПРОВЕРКА СРОКОВ ГОДНОСТИ ---
+async def check_expiring_items(bot: Bot):
+    async with start.async_session_maker() as session:
+        result = await session.execute(select(ItemModel))
+        items_list = result.scalars().all()
+
+        today = datetime.now().date()
+        for item in items_list:
+            if item.expires_at:
+                try:
+                    exp_date = datetime.strptime(item.expires_at, "%d.%m.%Y").date()
+                    delta = (exp_date - today).days
+
+                    if delta == 14 and item.notified_14_days == 0:
+                        await bot.send_message(
+                            item.user_id,
+                            f"⚠️ <b>Внимание!</b> У товара <b>«{item.name}»</b> истекает срок годности через 14 дн. (годен до {item.expires_at}).",
+                            parse_mode="HTML"
+                        )
+                        item.notified_14_days = 1
+                        await session.commit()
+                except Exception:
+                    pass
+
+
+# --- ГЛАВНАЯ ФУНКЦИЯ ЗАПУСКА ---
 async def main():
-    if not config.bot_token:
-        logging.error("Не найден bot_token в конфигурации!")
-        return
-
-    # Инициализация бота и диспетчера
-    bot = Bot(
-        token=config.bot_token,
-        default=DefaultBotProperties(parse_mode=ParseMode.HTML)
-    )
+    bot = Bot(token=config.bot_token)
     dp = Dispatcher()
 
-    # Инициализируем базу данных при старте
-    await init_db()
-
-    # Подключаем твои роутеры из папки handlers
+    # Подключаем роутеры
     dp.include_router(start.router)
     dp.include_router(items.router)
     dp.include_router(clear.router)
 
-    # Настраиваем фоновый планировщик
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(check_expiring_items, "interval", seconds=30, args=[bot, config.admin_id])
+    # Инициализация базы данных
+    await init_db()
+
+    # Настройка планировщика
+    scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
+    scheduler.add_job(check_expiring_items, "interval", seconds=30, args=(bot,))
     scheduler.start()
 
-    # Сначала запускаем веб-сервер для Render, чтобы порт занялся мгновенно
-    await start_web_server()
+    # Запускаем веб-сервер в фоне для Render
+    await web_server()
 
-    # Удаляем вебхуки и стартуем поллинг
+    # Запуск поллинга бота
     await bot.delete_webhook(drop_pending_updates=True)
-    logging.info("Бот успешно запущен и ожидает сообщения...")
-
     await dp.start_polling(bot)
 
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        logging.info("Бот остановлен.")
+    asyncio.run(main())
