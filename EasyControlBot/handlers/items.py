@@ -6,8 +6,6 @@ from sqlalchemy import select, delete
 from datetime import datetime
 from database.database import async_session_maker
 from database.models import ItemModel
-from EasyControlBot.database.database import async_session_maker
-from EasyControlBot.database.models import ItemModel
 
 router = Router()
 
