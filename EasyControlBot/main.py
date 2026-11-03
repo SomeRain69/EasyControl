@@ -28,6 +28,7 @@ async def web_server():
     await site.start()
 
 
+
 # --- ФОНОВАЯ ПРОВЕРКА СРОКОВ ГОДНОСТИ ---
 async def check_expiring_items(bot: Bot):
     async with async_session_maker() as session:

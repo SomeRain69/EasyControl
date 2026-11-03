@@ -7,6 +7,7 @@ from EasyControlBot.database.models import ItemModel
 router = Router()
 
 
+
 @router.callback_query(F.data == "btn_clear")
 async def clear_confirm(callback: CallbackQuery):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[

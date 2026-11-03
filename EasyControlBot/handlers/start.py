@@ -3,6 +3,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 
 router = Router()
 
+
 def get_main_menu_keyboard():
     return InlineKeyboardMarkup(
         inline_keyboard=[
